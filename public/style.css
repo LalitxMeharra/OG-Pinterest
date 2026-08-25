@@ -68,12 +68,48 @@ h1.hero-title .red-text { color: var(--crimson); }
 .media-frame { width: 100%; max-width: 260px; background: var(--white); padding: 8px; border: 2px solid var(--ink-black); border-radius: 6px; box-shadow: 4px 4px 0px rgba(20, 13, 7, 0.15); position: relative; overflow: hidden; }
 .media-frame img, .media-frame video { width: 100%; height: auto; display: block; border-radius: 4px; }
 
-/* NEO-BRUTALIST PLAY BUTTON */
-.premium-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--white); color: var(--ink-black); width: 56px; height: 56px; border-radius: 50%; border: 3px solid var(--ink-black); box-shadow: 4px 4px 0px var(--ink-black); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; transition: all 0.1s ease; }
-.premium-play-btn svg { width: 24px; height: 24px; fill: currentColor; margin-left: 4px; }
-.premium-play-btn:hover { background: var(--crimson); color: var(--white); transform: translate(-50%, -50%) scale(1.05); }
-.premium-play-btn:active { transform: translate(-45%, -45%); box-shadow: 0px 0px 0px var(--ink-black); }
-.media-frame.is-playing .premium-play-btn { opacity: 0; pointer-events: none; }
+/* ========================================= */
+/* SOFT PREMIUM PLAY BUTTON                  */
+/* ========================================= */
+.premium-play-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--white);
+  color: var(--ink-black);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none; /* Border hata di clean look ke liye */
+  box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.25); /* Soft background shadow */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.premium-play-btn svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+  margin-left: 4px;
+}
+
+.premium-play-btn:hover {
+  background: var(--crimson);
+  color: var(--white);
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0px 12px 28px rgba(216, 58, 45, 0.4); /* Red glow shadow on hover */
+}
+
+.premium-play-btn:active {
+  transform: translate(-50%, -50%) scale(0.95);
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 
 /* VIDEO CONTROLS */
 .video-controls { position: absolute; bottom: 12px; left: 12px; right: 12px; padding: 10px; background: rgba(20, 13, 7, 0.9); border-radius: 4px; display: flex; align-items: center; gap: 10px; color: #fff; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
