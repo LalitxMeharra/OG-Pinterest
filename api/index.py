@@ -3,6 +3,7 @@ import re
 import urllib.parse
 from http.server import BaseHTTPRequestHandler
 import requests
+import time
 from bs4 import BeautifulSoup
 
 HEADERS = {
@@ -27,8 +28,9 @@ def extract_pinterest_media(pin_url):
     except Exception as e:
         return {"status": "error", "message": f"Connection Error: {str(e)}"}
 
+    # Extract Pin ID from final resolved URL
     match = re.search(r'/pin/(\d+)', final_url)
-    pin_id = match.group(1) if match else "download" # Default ID agar na mile
+    pin_id = match.group(1) if match else ""
 
     soup = BeautifulSoup(html_text, "html.parser")
     pws_script = soup.find("script", {"id": "__PWS_INITIAL_PROPS__"}) or soup.find("script", {"id": "__PWS_DATA__"})
@@ -36,13 +38,17 @@ def extract_pinterest_media(pin_url):
     og_image = soup.find("meta", property="og:image")
     fallback_thumb = og_image["content"] if og_image and og_image.get("content") else ""
 
-    if pws_script and pws_script.string and pin_id != "download":
+    if pws_script and pws_script.string:
         try:
             data = json.loads(pws_script.string)
             pins = data.get("initialReduxState", {}).get("pins", {})
             if not pins:
                 pins = data.get("props", {}).get("initialReduxState", {}).get("pins", {})
             
+            # Agar URL se ID mil gayi toh theek, warna object ki keys se first ID utha lenge
+            if not pin_id and pins:
+                pin_id = list(pins.keys())[0]
+
             target_pin = pins.get(pin_id)
             if target_pin:
                 title = target_pin.get("title") or target_pin.get("grid_title") or target_pin.get("description") or "Pinterest Media"
@@ -111,7 +117,7 @@ class handler(BaseHTTPRequestHandler):
 
         if "download" in path or ("url" in params and params.get("filename")):
             target_url = params.get("url", [""])[0]
-            filename = params.get("filename", ["media.mp4"])[0]
+            filename = params.get("filename", ["Pinterest-Media.mp4"])[0]
             if not target_url:
                 self._send_json({"error": "No download target"}, 400)
                 return
@@ -143,13 +149,15 @@ class handler(BaseHTTPRequestHandler):
                 safe_url = urllib.parse.quote(result['url'], safe='')
                 ext = "mp4" if result["type"] == "video" else "jpg"
                 
-                # Title aur Pin ID ko jod kar unique naam banana
-                clean_title = re.sub(r'[^\w\s-]', '', result["title"]).strip().replace(' ', '_') or "pin_media"
-                pin_id = result.get("pin_id", "vault")
-                final_filename = f"{clean_title}_{pin_id}.{ext}"
+                # Solid Filename Logic: Pinterest-{Pin_ID}.{ext}
+                pin_id = result.get("pin_id")
+                # Agar fallback cases me pin_id nahi aati hai, toh current timestamp daal denge
+                if not pin_id:
+                    pin_id = str(int(time.time()))
+                    
+                final_filename = f"Pinterest-{pin_id}.{ext}"
                 
-                # Proxy link generate karna naye naam ke sath
-                result["proxy_download"] = f"/api/download?url={safe_url}&filename={urllib.parse.quote(final_filename)}"
+                result["proxy_download"] = f"/api/download?url={safe_url}&filename={final_filename}"
 
             self._send_json(result)
             return
