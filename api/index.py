@@ -11,6 +11,7 @@ HEADERS = {
 }
 
 def convert_m3u8_to_mp4(m3u8_url):
+    """Converts Pinterest HLS streams to direct MP4 master links."""
     if "/hls/" in m3u8_url: return m3u8_url.replace("/hls/", "/720p/").replace(".m3u8", ".mp4")
     if "/iht/hls/" in m3u8_url: return m3u8_url.replace("/iht/hls/", "/mc/720p/").replace(".m3u8", ".mp4")
     if "/mc/hls/" in m3u8_url: return m3u8_url.replace("/mc/hls/", "/mc/720p/").replace(".m3u8", ".mp4")
@@ -21,7 +22,7 @@ def extract_pinterest_media(pin_url):
     session.headers.update(HEADERS)
     
     try:
-        res = session.get(pin_url, allow_redirects=True, timeout=12)
+        res = session.get(pin_url, allow_redirects=True, timeout=15)
         final_url = res.url
         html_text = res.text
     except Exception as e:
@@ -33,9 +34,9 @@ def extract_pinterest_media(pin_url):
     soup = BeautifulSoup(html_text, "html.parser")
     pws_script = soup.find("script", {"id": "__PWS_INITIAL_PROPS__"}) or soup.find("script", {"id": "__PWS_DATA__"})
     
-    # Global Thumbnail Fallback
+    # Safe Fallback Thumbnail (Bina kisi zabardasti modification ke)
     og_image = soup.find("meta", property="og:image")
-    global_thumb = re.sub(r"/\d+x/", "/originals/", og_image["content"]) if og_image and og_image.get("content") else ""
+    fallback_thumb = og_image["content"] if og_image and og_image.get("content") else ""
 
     if pws_script and pws_script.string and pin_id:
         try:
@@ -47,24 +48,24 @@ def extract_pinterest_media(pin_url):
             target_pin = pins.get(pin_id)
             if target_pin:
                 title = target_pin.get("title") or target_pin.get("grid_title") or target_pin.get("description") or "Pinterest Media"
+                
+                # AWS AccessDenied rokne ke liye safely available highest res image uthana
+                images_dict = target_pin.get("images", {})
+                best_img = fallback_thumb
+                for key in ["originals", "orig", "1200x", "736x", "474x"]:
+                    if key in images_dict and images_dict[key].get("url"):
+                        best_img = images_dict[key]["url"]
+                        break
+                
                 pin_str = json.dumps(target_pin)
                 
-                # Custom Thumbnail extraction
-                thumb_url = global_thumb
-                img_urls = re.findall(r'https://i\.pinimg\.com/originals/[^\s"\'<>\\]+\.(?:jpg|png|webp)', pin_str)
-                if not img_urls:
-                    escaped_imgs = re.findall(r'https:\\/\\/i\.pinimg\.com\\/originals\\/[^\s"\'<>\\]+\.(?:jpg|png|webp)', pin_str)
-                    img_urls = [u.replace('\\/', '/') for u in escaped_imgs]
-                if img_urls:
-                    thumb_url = img_urls[0]
-
                 # 1. MP4 Search
                 mp4_urls = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', pin_str)
                 if not mp4_urls:
                     escaped_mp4s = re.findall(r'https:\\/\\/v[0-9a-zA-Z-]*\.pinimg\.com\\/videos\\/[^\s"\'<>\\]+\.mp4', pin_str)
                     mp4_urls = [u.replace('\\/', '/') for u in escaped_mp4s]
                 
-                # 2. HLS Search
+                # 2. HLS Search -> Converter
                 if not mp4_urls:
                     m3u8_urls = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.m3u8', pin_str)
                     if not m3u8_urls:
@@ -76,16 +77,18 @@ def extract_pinterest_media(pin_url):
                         if converted:
                             mp4_urls.append(converted)
 
+                # Return Video
                 if mp4_urls:
                     best_video = max(mp4_urls, key=len)
                     for url in mp4_urls:
                         if '1080p' in url or '720p' in url or 'expMp4' in url:
                             best_video = url
                             break
-                    return {"status": "success", "type": "video", "title": title, "url": best_video, "thumbnail": thumb_url}
+                    return {"status": "success", "type": "video", "title": title, "url": best_video, "thumbnail": best_img}
 
-                if img_urls:
-                    return {"status": "success", "type": "image", "title": title, "url": img_urls[0], "thumbnail": img_urls[0]}
+                # Return Image
+                if best_img:
+                    return {"status": "success", "type": "image", "title": title, "url": best_img, "thumbnail": best_img}
         except Exception:
             pass
 
@@ -93,17 +96,18 @@ def extract_pinterest_media(pin_url):
     raw_mp4s = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', html_text)
     if raw_mp4s:
         best_video = max(raw_mp4s, key=len)
-        return {"status": "success", "type": "video", "title": "Pinterest Video", "url": best_video, "thumbnail": global_thumb}
+        return {"status": "success", "type": "video", "title": "Pinterest Video", "url": best_video, "thumbnail": fallback_thumb}
         
     raw_m3u8s = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.m3u8', html_text)
     if raw_m3u8s:
         for m3u8 in raw_m3u8s:
             converted = convert_m3u8_to_mp4(m3u8)
             if converted:
-                return {"status": "success", "type": "video", "title": "Pinterest Video", "url": converted, "thumbnail": global_thumb}
+                return {"status": "success", "type": "video", "title": "Pinterest Video", "url": converted, "thumbnail": fallback_thumb}
 
-    if global_thumb:
-        return {"status": "success", "type": "image", "title": "Pinterest Image", "url": global_thumb, "thumbnail": global_thumb}
+    if fallback_thumb:
+        safe_high_res = fallback_thumb.replace("236x", "736x").replace("474x", "736x")
+        return {"status": "success", "type": "image", "title": "Pinterest Image", "url": safe_high_res, "thumbnail": fallback_thumb}
 
     return {"status": "error", "message": "Failed to extract media. Check if pin is public."}
 
@@ -113,9 +117,32 @@ class handler(BaseHTTPRequestHandler):
         path = parsed.path.lower()
         params = urllib.parse.parse_qs(parsed.query)
 
-        # ... (Stream and Download Proxy Routes remain exact same) ...
-        # Fetch Route Updates
-        if "fetch" in path or "url" in params:
+        # 1. DOWNLOAD PROXY ROUTE
+        if "download" in path or ("url" in params and params.get("filename")):
+            target_url = params.get("url", [""])[0]
+            filename = params.get("filename", ["media.mp4"])[0]
+            if not target_url:
+                self._send_json({"error": "No download target"}, 400)
+                return
+
+            try:
+                r = requests.get(target_url, headers=HEADERS, stream=True, timeout=20)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Access-Control-Allow-Origin", "*")
+                if "content-length" in r.headers:
+                    self.send_header("Content-Length", r.headers["content-length"])
+                self.end_headers()
+                for chunk in r.iter_content(chunk_size=65536):
+                    if chunk:
+                        self.wfile.write(chunk)
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+            return
+
+        # 2. FETCH ROUTE
+        elif "fetch" in path or "url" in params:
             pin_url = params.get("url", [""])[0].strip()
             if not pin_url:
                 self._send_json({"status": "error", "message": "Missing URL"}, 400)
@@ -130,6 +157,9 @@ class handler(BaseHTTPRequestHandler):
 
             self._send_json(result)
             return
+
+        else:
+            self._send_json({"error": "Not Found"}, 404)
 
     def _send_json(self, data, status=200):
         self.send_response(status)
