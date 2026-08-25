@@ -10,51 +10,68 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9"
 }
 
+def convert_m3u8_to_mp4(m3u8_url):
+    """Converts Pinterest HLS streams to direct MP4 master links."""
+    if "/hls/" in m3u8_url:
+        return m3u8_url.replace("/hls/", "/720p/").replace(".m3u8", ".mp4")
+    if "/iht/hls/" in m3u8_url:
+        return m3u8_url.replace("/iht/hls/", "/mc/720p/").replace(".m3u8", ".mp4")
+    if "/mc/hls/" in m3u8_url:
+        return m3u8_url.replace("/mc/hls/", "/mc/720p/").replace(".m3u8", ".mp4")
+    return None
+
 def extract_pinterest_media(pin_url):
     session = requests.Session()
     session.headers.update(HEADERS)
     
     try:
-        # Step 1: Follow redirects (pin.it -> full url)
         res = session.get(pin_url, allow_redirects=True, timeout=12)
         final_url = res.url
         html_text = res.text
     except Exception as e:
         return {"status": "error", "message": f"Connection Error: {str(e)}"}
 
-    # Step 2: Extract EXACT Pin ID from URL
     match = re.search(r'/pin/(\d+)', final_url)
     pin_id = match.group(1) if match else None
 
     soup = BeautifulSoup(html_text, "html.parser")
-    pws_script = soup.find("script", {"id": "__PWS_DATA__"})
+    
+    # Check BOTH old and new Pinterest JSON data structures
+    pws_script = soup.find("script", {"id": "__PWS_INITIAL_PROPS__"}) or soup.find("script", {"id": "__PWS_DATA__"})
     
     if pws_script and pws_script.string and pin_id:
         try:
             data = json.loads(pws_script.string)
-            pins = data.get("props", {}).get("initialReduxState", {}).get("pins", {})
             
-            # Step 3: Isolate ONLY the requested Pin's data
+            # Navigate nested JSON safely
+            pins = data.get("initialReduxState", {}).get("pins", {})
+            if not pins:
+                pins = data.get("props", {}).get("initialReduxState", {}).get("pins", {})
+            
             target_pin = pins.get(pin_id)
             if target_pin:
-                title = target_pin.get("title") or target_pin.get("grid_title") or "Pinterest Media"
+                title = target_pin.get("title") or target_pin.get("grid_title") or target_pin.get("description") or "Pinterest Media"
                 pin_str = json.dumps(target_pin)
                 
-                # Search for MP4 Videos in this specific pin
+                # 1. Search for direct MP4 videos
                 mp4_urls = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', pin_str)
                 if not mp4_urls:
                     escaped_mp4s = re.findall(r'https:\\/\\/v[0-9a-zA-Z-]*\.pinimg\.com\\/videos\\/[^\s"\'<>\\]+\.mp4', pin_str)
                     mp4_urls = [u.replace('\\/', '/') for u in escaped_mp4s]
                 
-                # Hack: If Pinterest only gives HLS (.m3u8), convert link to force raw .mp4
+                # 2. Search for M3U8 (HLS) streams and convert to MP4
                 if not mp4_urls:
                     m3u8_urls = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.m3u8', pin_str)
-                    if m3u8_urls:
-                        mp4_urls.append(m3u8_urls[0].replace('/hls/', '/720p/').replace('.m3u8', '.mp4'))
-                        mp4_urls.append(m3u8_urls[0].replace('/iht/hls/', '/mc/720p/').replace('.m3u8', '.mp4'))
+                    if not m3u8_urls:
+                        escaped_m3u8s = re.findall(r'https:\\/\\/v[0-9a-zA-Z-]*\.pinimg\.com\\/videos\\/[^\s"\'<>\\]+\.m3u8', pin_str)
+                        m3u8_urls = [u.replace('\\/', '/') for u in escaped_m3u8s]
+                    
+                    for m3u8 in m3u8_urls:
+                        converted = convert_m3u8_to_mp4(m3u8)
+                        if converted:
+                            mp4_urls.append(converted)
 
                 if mp4_urls:
-                    # Prefer 1080p or 720p links
                     best_video = max(mp4_urls, key=len)
                     for url in mp4_urls:
                         if '1080p' in url or '720p' in url or 'expMp4' in url:
@@ -62,7 +79,7 @@ def extract_pinterest_media(pin_url):
                             break
                     return {"status": "success", "type": "video", "title": title, "url": best_video}
 
-                # Search for Original 4K Images
+                # 3. Search for Original 4K Images if video is not found
                 img_urls = re.findall(r'https://i\.pinimg\.com/originals/[^\s"\'<>\\]+\.(?:jpg|png|webp)', pin_str)
                 if not img_urls:
                     escaped_imgs = re.findall(r'https:\\/\\/i\.pinimg\.com\\/originals\\/[^\s"\'<>\\]+\.(?:jpg|png|webp)', pin_str)
@@ -74,10 +91,18 @@ def extract_pinterest_media(pin_url):
         except Exception:
             pass
 
-    # Fallbacks (Only if exact targeting fails)
-    og_video = soup.find("meta", property="og:video") or soup.find("meta", property="og:video:secure_url")
-    if og_video and og_video.get("content") and ".mp4" in og_video.get("content"):
-        return {"status": "success", "type": "video", "title": "Pinterest Video", "url": og_video["content"]}
+    # GLOBAL FALLBACKS (If JSON extraction fails completely)
+    raw_mp4s = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', html_text)
+    if raw_mp4s:
+        best_video = max(raw_mp4s, key=len)
+        return {"status": "success", "type": "video", "title": "Pinterest Video", "url": best_video}
+        
+    raw_m3u8s = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.m3u8', html_text)
+    if raw_m3u8s:
+        for m3u8 in raw_m3u8s:
+            converted = convert_m3u8_to_mp4(m3u8)
+            if converted:
+                return {"status": "success", "type": "video", "title": "Pinterest Video", "url": converted}
 
     og_image = soup.find("meta", property="og:image")
     if og_image and og_image.get("content"):
@@ -125,12 +150,9 @@ class handler(BaseHTTPRequestHandler):
 
             result = extract_pinterest_media(pin_url)
             if result.get("status") == "success":
-                # Create safe strings for proxy
                 safe_url = urllib.parse.quote(result['url'], safe='')
                 ext = "mp4" if result["type"] == "video" else "jpg"
                 clean_title = re.sub(r'[^\w\s-]', '', result["title"]).strip().replace(' ', '_') or "pin_media"
-                
-                # Append proxy download link to payload
                 result["proxy_download"] = f"/api/download?url={safe_url}&filename={urllib.parse.quote(clean_title)}.{ext}"
 
             self._send_json(result)
