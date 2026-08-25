@@ -108,8 +108,10 @@ function initVideoLogic() {
   wrapper.classList.add('is-paused');
 
   let isDragging = false;
+  let fadeTimer; // Timer logic ke liye
 
   const togglePlay = (e) => {
+    // Agar niche controls pe click hua hai toh background toggle roko
     if(e.target.closest('.video-controls')) return; 
     vid.paused ? vid.play() : vid.pause();
   };
@@ -118,11 +120,25 @@ function initVideoLogic() {
     if (vid.paused) {
       wrapper.classList.remove('is-playing');
       wrapper.classList.add('is-paused');
+      
       playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+      
+      // Timer clear karo aur button ko wapas dikhao
+      clearTimeout(fadeTimer);
+      bigPlay.classList.remove('fade-out');
+      bigPlay.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+      
     } else {
       wrapper.classList.add('is-playing');
       wrapper.classList.remove('is-paused');
+      
       playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+      
+      // Icon Pause karo, fir 1.5s baad gayab kar do
+      bigPlay.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+      fadeTimer = setTimeout(() => {
+        bigPlay.classList.add('fade-out');
+      }, 1500);
     }
   };
 
@@ -157,6 +173,7 @@ function initVideoLogic() {
       : '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>';
   });
 }
+
 
 function renderResult(data) {
   forceDownloadLink = window.location.origin + data.proxy_download;
