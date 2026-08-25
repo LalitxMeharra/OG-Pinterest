@@ -3,16 +3,19 @@ const pinUrlInput = document.getElementById('pinUrl');
 const pasteBtn = document.getElementById('pasteBtn');
 const submitBtn = document.getElementById('submitBtn');
 
-const previewBlock = document.getElementById('previewBlock');
-const mediaWrapper = document.getElementById('mediaWrapper');
-const mediaTypeTag = document.getElementById('mediaTypeTag');
-const previewTitle = document.getElementById('previewTitle');
-const btnPrimaryDl = document.getElementById('btnPrimaryDl');
-const btnPrimaryText = document.getElementById('btnPrimaryText');
-const btnPrimarySub = document.getElementById('btnPrimarySub');
-const btnCopyLink = document.getElementById('btnCopyLink');
+const resultVault = document.getElementById('resultVault');
+const mediaViewport = document.getElementById('mediaViewport');
+const resBadge = document.getElementById('resBadge');
+const mediaHeading = document.getElementById('mediaHeading');
+const btnDirectDownload = document.getElementById('btnDirectDownload');
+const dlBtnText = document.getElementById('dlBtnText');
+const btnCopyDirect = document.getElementById('btnCopyDirect');
 
-let directMediaUrl = '';
+const historyWrap = document.getElementById('historyWrap');
+const historyItems = document.getElementById('historyItems');
+const clearVaultBtn = document.getElementById('clearVaultBtn');
+
+let activeDownloadLink = '';
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -35,7 +38,7 @@ pasteBtn.addEventListener('click', async () => {
     }
   } catch (_) {}
   pinUrlInput.focus();
-  toast('Please paste manually');
+  toast('Paste permission required / Paste manually');
 });
 
 // 2. FETCH FROM API
@@ -46,7 +49,7 @@ fetchForm.addEventListener('submit', async (e) => {
 
   submitBtn.disabled = true;
   submitBtn.textContent = '⚡ EXTRACTING...';
-  toast('Resolving Pin Data...');
+  toast('Isolating Media Pipeline...');
 
   try {
     const res = await fetch(`/api/fetch?url=${encodeURIComponent(rawUrl)}`);
@@ -56,8 +59,9 @@ fetchForm.addEventListener('submit', async (e) => {
       throw new Error(data.message || 'Unable to extract pin');
     }
 
-    renderMedia(data);
-    toast('Media Extracted Successfully!');
+    renderResult(data);
+    persistVault(data);
+    toast('Master Stream Unlocked!');
   } catch (err) {
     toast(`Error: ${err.message}`);
   } finally {
@@ -66,46 +70,88 @@ fetchForm.addEventListener('submit', async (e) => {
   }
 });
 
-// 3. RENDER MEDIA PREVIEW
-function renderMedia(data) {
-  directMediaUrl = data.url;
-  previewTitle.textContent = data.title;
+// 3. RENDER PREVIEW & LINKS
+function renderResult(data) {
+  activeDownloadLink = data.url; 
+  mediaHeading.textContent = data.title;
 
   if (data.type === 'video') {
-    mediaTypeTag.textContent = 'VIDEO · 1080P MASTER';
-    mediaWrapper.innerHTML = `
-      <video controls autoplay loop playsinline src="${data.url}"></video>
-    `;
-    btnPrimaryText.textContent = '⬇ DOWNLOAD MP4 VIDEO';
-    btnPrimarySub.textContent = 'Direct Pinterest CDN Stream';
+    resBadge.textContent = '1080P MASTER VIDEO';
+    // Direct Pinterest CDN link for preview
+    mediaViewport.innerHTML = `<video controls autoplay loop playsinline src="${data.url}"></video>`;
+    dlBtnText.textContent = '⬇ DOWNLOAD MP4';
   } else {
-    mediaTypeTag.textContent = 'IMAGE · 4K ORIGINAL';
-    mediaWrapper.innerHTML = `
-      <img src="${data.url}" alt="Pinterest Image" loading="lazy">
-    `;
-    btnPrimaryText.textContent = '⬇ DOWNLOAD 4K IMAGE';
-    btnPrimarySub.textContent = 'Direct Pinterest CDN Raw';
+    resBadge.textContent = '4K ORIGINAL IMAGE';
+    // Direct Pinterest CDN link for preview (bypasses thanks to meta referrer tag)
+    mediaViewport.innerHTML = `<img src="${data.url}" alt="Pin Media" loading="lazy">`;
+    dlBtnText.textContent = '⬇ DOWNLOAD 4K JPG';
   }
 
-  btnPrimaryDl.href = data.url;
-  btnPrimaryDl.target = '_blank';
-  previewBlock.style.display = 'block';
-  previewBlock.scrollIntoView({ behavior: 'smooth' });
+  // Use the Proxy link to FORCE the download dialog box instead of opening in a new tab
+  btnDirectDownload.href = data.proxy_download;
+  
+  resultVault.style.display = 'block';
+  resultVault.scrollIntoView({ behavior: 'smooth' });
 }
 
-// 4. COPY DIRECT CDN LINK
-btnCopyLink.addEventListener('click', () => {
-  if (!directMediaUrl) return;
+// 4. COPY ORIGINAL LINK
+btnCopyDirect.addEventListener('click', () => {
+  if (!activeDownloadLink) return;
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(directMediaUrl);
-    toast('Direct Pinterest CDN Link Copied!');
+    navigator.clipboard.writeText(activeDownloadLink);
+    toast('Direct CDN Link Copied!');
   } else {
     const temp = document.createElement('input');
-    temp.value = directMediaUrl;
+    temp.value = activeDownloadLink;
     document.body.appendChild(temp);
     temp.select();
     document.execCommand('copy');
     document.body.removeChild(temp);
-    toast('Direct Pinterest CDN Link Copied!');
+    toast('Direct CDN Link Copied!');
   }
 });
+
+// 5. LOCAL HISTORY VAULT
+function fetchVault() {
+  try { return JSON.parse(localStorage.getItem('og_vault_pro')) || []; }
+  catch (e) { return []; }
+}
+
+function persistVault(item) {
+  let list = fetchVault();
+  list = list.filter(i => i.url !== item.url);
+  list.unshift(item);
+  if (list.length > 6) list.pop();
+  localStorage.setItem('og_vault_pro', JSON.stringify(list));
+  renderVault();
+}
+
+function renderVault() {
+  const list = fetchVault();
+  if (!list.length) {
+    historyWrap.style.display = 'none';
+    return;
+  }
+
+  historyItems.innerHTML = list.map(item => `
+    <div class="history-card" onclick='restoreVaultItem(${JSON.stringify(item)})'>
+      <img class="history-thumb" src="${item.url}" alt="Vault Item" loading="lazy">
+      <div class="history-name">${item.title}</div>
+    </div>
+  `).join('');
+
+  historyWrap.style.display = 'block';
+}
+
+window.restoreVaultItem = function(item) {
+  renderResult(item);
+};
+
+clearVaultBtn.addEventListener('click', () => {
+  localStorage.removeItem('og_vault_pro');
+  renderVault();
+  toast('Vault History Cleared');
+});
+
+// Init
+renderVault();
