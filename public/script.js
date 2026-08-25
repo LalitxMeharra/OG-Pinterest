@@ -77,49 +77,40 @@ fetchForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Premium Custom Player HTML (No Autoplay)
+// BUILD CUSTOM COMPACT VIDEO PLAYER
 function buildCustomVideoPlayer(videoUrl, posterUrl) {
   return `
-    <div class="vp-wrapper is-paused" id="customPlayer">
-      <video id="vpVid" src="${videoUrl}" poster="${posterUrl}" playsinline preload="metadata"></video>
-      <div class="vp-overlay-play" id="vpOverlayPlay">
-        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    <div class="premium-play-btn" id="vpBigPlay">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </div>
+    <video id="vpVid" src="${videoUrl}" poster="${posterUrl}" playsinline preload="metadata"></video>
+    <div class="video-controls" id="vpControls">
+      <div class="control-icon" id="vpPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+      <div class="vp-progress-wrap">
+        <input type="range" class="vp-progress" id="vpSeek" min="0" max="100" value="0" step="0.1">
       </div>
-      <div class="vp-controls" id="vpControls">
-        <button class="vp-btn" id="vpPlay">
-          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        </button>
-        <div class="vp-progress-wrap">
-          <input type="range" class="vp-progress" id="vpSeek" min="0" max="100" value="0" step="0.1">
-        </div>
-        <span class="vp-time" id="vpTime">0:00</span>
-        <button class="vp-btn" id="vpMute">
-          <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
-        </button>
-        <button class="vp-btn" id="vpFull">
-          <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-        </button>
-      </div>
+      <span class="time-text" id="vpTime">0:00</span>
+      <div class="control-icon" id="vpMute"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg></div>
     </div>
   `;
 }
 
 function initVideoLogic() {
-  const wrapper = document.getElementById('customPlayer');
+  const wrapper = document.getElementById('mediaWrapper');
   const vid = document.getElementById('vpVid');
+  const bigPlay = document.getElementById('vpBigPlay');
   const playBtn = document.getElementById('vpPlay');
   const seek = document.getElementById('vpSeek');
   const time = document.getElementById('vpTime');
   const muteBtn = document.getElementById('vpMute');
-  const fullBtn = document.getElementById('vpFull');
 
   if(!vid) return;
+  wrapper.classList.add('is-paused');
 
   let isDragging = false;
 
   const togglePlay = (e) => {
-    // Prevent controls click from pausing/playing the video background
-    if(e.target.closest('.vp-controls')) return; 
+    if(e.target.closest('.video-controls')) return; 
     vid.paused ? vid.play() : vid.pause();
   };
 
@@ -165,12 +156,6 @@ function initVideoLogic() {
       ? '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>'
       : '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>';
   });
-
-  fullBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (vid.requestFullscreen) vid.requestFullscreen();
-    else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
-  });
 }
 
 function renderResult(data) {
@@ -180,7 +165,12 @@ function renderResult(data) {
   if (previewMeta) previewMeta.textContent = data.type === 'video' ? 'Direct Pipeline Stream · MP4 Video' : 'Direct Pipeline Stream · High-Res Image';
 
   if (data.type === 'video') {
-    if (mediaTypeTag) mediaTypeTag.textContent = 'VIDEO · 1080P MASTER';
+    if (mediaTypeTag) {
+      mediaTypeTag.textContent = 'VIDEO · 1080P MASTER';
+      mediaTypeTag.style.background = 'rgba(216, 58, 45, 0.1)';
+      mediaTypeTag.style.color = 'var(--crimson)';
+      mediaTypeTag.style.borderColor = 'var(--crimson)';
+    }
     if (mediaWrapper) {
         mediaWrapper.innerHTML = buildCustomVideoPlayer(data.url, data.thumbnail);
         initVideoLogic();
@@ -188,8 +178,13 @@ function renderResult(data) {
     if (btnPrimaryText) btnPrimaryText.textContent = '⬇ DOWNLOAD MP4';
     if (btnPrimarySub) btnPrimarySub.textContent = 'Master Quality Video';
   } else {
-    if (mediaTypeTag) mediaTypeTag.textContent = 'IMAGE · ORIGINAL RAW';
-    if (mediaWrapper) mediaWrapper.innerHTML = `<img src="${data.url}" alt="Pin Media" loading="lazy" style="max-width: 100%; max-height: 480px; object-fit: contain;">`;
+    if (mediaTypeTag) {
+      mediaTypeTag.textContent = 'IMAGE · 4K ORIGINAL';
+      mediaTypeTag.style.background = 'transparent';
+      mediaTypeTag.style.color = 'var(--ink-black)';
+      mediaTypeTag.style.borderColor = 'var(--ink-black)';
+    }
+    if (mediaWrapper) mediaWrapper.innerHTML = `<img src="${data.url}" alt="Pin Media" loading="lazy">`;
     if (btnPrimaryText) btnPrimaryText.textContent = '⬇ DOWNLOAD JPG';
     if (btnPrimarySub) btnPrimarySub.textContent = 'Original Raw Image';
   }
