@@ -3,155 +3,137 @@ import re
 import urllib.parse
 from http.server import BaseHTTPRequestHandler
 import requests
-from bs4 import BeautifulSoup
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
     "Accept-Language": "en-US,en;q=0.9",
+    "X-Requested-With": "XMLHttpRequest",
     "Referer": "https://www.pinterest.com/"
 }
 
-def resolve_pin_url(pin_url):
-    """Short URL ko expand karta hai aur clean Pinterest Pin URL return karta hai."""
+def extract_pin_id(url):
+    """Short URL expand karke numeric Pin ID nikalta hai."""
     session = requests.Session()
-    session.headers.update(HEADERS)
     try:
-        res = session.get(pin_url, allow_redirects=True, timeout=12)
-        return res.url, res.text
-    except Exception as e:
-        return None, str(e)
+        res = session.get(url, headers={"User-Agent": HEADERS["User-Agent"]}, allow_redirects=True, timeout=10)
+        final_url = res.url
+        match = re.search(r'/pin/(\d+)', final_url)
+        if match:
+            return match.group(1), final_url, res.text
+    except Exception:
+        pass
+    # Agar direct ID input me hi ho
+    match = re.search(r'/pin/(\d+)', url)
+    return (match.group(1), url, "") if match else (None, url, "")
 
 def extract_pinterest_media(pin_url):
-    final_url, html_content = resolve_pin_url(pin_url)
-    if not final_url:
-        return {"status": "error", "message": f"Network resolve failed: {html_content}"}
-
-    soup = BeautifulSoup(html_content, "html.parser")
+    pin_id, final_url, html_backup = extract_pin_id(pin_url)
     
-    # Method 1: Canonical / JSON-LD Data Inspection
-    for script in soup.find_all("script", type="application/ld+json"):
-        if script.string:
-            try:
-                ld_data = json.loads(script.string)
-                # Video Object
-                if ld_data.get("@type") == "VideoObject" and ld_data.get("contentUrl"):
+    if not pin_id:
+        return {"status": "error", "message": "Invalid Pinterest Link. Could not find Pin ID."}
+
+    # API Strategy 1: PinResource Direct Endpoint
+    api_url = "https://www.pinterest.com/resource/PinResource/get/"
+    params = {
+        "data": json.dumps({
+            "options": {
+                "id": pin_id,
+                "field_set_key": "detailed"
+            },
+            "context": {}
+        })
+    }
+
+    try:
+        res = requests.get(api_url, params=params, headers=HEADERS, timeout=12)
+        if res.status_code == 200:
+            data = res.json()
+            pin_data = data.get("resource_response", {}).get("data", {})
+            
+            title = pin_data.get("title") or pin_data.get("grid_title") or "Pinterest Media"
+            
+            # 1. Video Check
+            videos = pin_data.get("videos", {})
+            if videos and "video_list" in videos:
+                v_list = videos["video_list"]
+                best_video = None
+                max_w = 0
+                for _, val in v_list.items():
+                    url = val.get("url", "")
+                    width = val.get("width", 0)
+                    if url.endswith(".mp4") and width >= max_w:
+                        max_w = width
+                        best_video = url
+                
+                if best_video:
+                    thumb = pin_data.get("images", {}).get("orig", {}).get("url") or ""
                     return {
                         "status": "success",
                         "type": "video",
-                        "title": ld_data.get("name", "Pinterest Video"),
-                        "download_url": ld_data["contentUrl"],
-                        "thumbnail": ld_data.get("thumbnailUrl", "")
-                    }
-                # Image Object
-                if ld_data.get("@type") == "ImageObject" and ld_data.get("contentUrl"):
-                    return {
-                        "status": "success",
-                        "type": "image",
-                        "title": ld_data.get("name", "Pinterest 4K Image"),
-                        "download_url": ld_data["contentUrl"],
-                        "thumbnail": ld_data["contentUrl"]
-                    }
-            except Exception:
-                pass
-
-    # Method 2: __PWS_DATA__ and Relay State JSON
-    pws_script = soup.find("script", {"id": "__PWS_DATA__"})
-    if pws_script and pws_script.string:
-        try:
-            data = json.loads(pws_script.string)
-            pins = data.get("props", {}).get("initialReduxState", {}).get("pins", {})
-            for _, pin in pins.items():
-                title = pin.get("title") or pin.get("grid_title") or "Pinterest Media"
-                
-                # Check for Videos
-                videos = pin.get("videos", {})
-                if videos and "video_list" in videos:
-                    v_list = videos["video_list"]
-                    best_url = None
-                    max_w = 0
-                    for _, val in v_list.items():
-                        url = val.get("url", "")
-                        width = val.get("width", 0)
-                        if url.endswith(".mp4") and width >= max_w:
-                            max_w = width
-                            best_url = url
-                    
-                    if best_url:
-                        thumb = pin.get("images", {}).get("orig", {}).get("url") or ""
-                        return {
-                            "status": "success",
-                            "type": "video",
-                            "title": title,
-                            "download_url": best_url,
-                            "thumbnail": thumb
-                        }
-
-                # Check for 4K Original Images
-                images = pin.get("images", {})
-                orig_url = images.get("orig", {}).get("url")
-                if orig_url:
-                    return {
-                        "status": "success",
-                        "type": "image",
                         "title": title,
+                        "download_url": best_video,
+                        "thumbnail": thumb
+                    }
+
+            # 2. 4K Original Image Check
+            images = pin_data.get("images", {})
+            orig_img = images.get("orig", {}).get("url")
+            if orig_img:
+                return {
+                    "status": "success",
+                    "type": "image",
+                    "title": title,
+                    "download_url": orig_img,
+                    "thumbnail": orig_img
+                }
+    except Exception:
+        pass
+
+    # API Strategy 2: Pidgets Public API Fallback
+    try:
+        pidget_url = f"https://api.pinterest.com/v3/pidgets/pins/info/?pin_ids={pin_id}"
+        p_res = requests.get(pidget_url, headers=HEADERS, timeout=10).json()
+        pins_dict = p_res.get("data", {})
+        if pin_id in pins_dict:
+            p_data = pins_dict[pin_id]
+            images = p_data.get("images", {})
+            for key in ["orig", "564x", "474x"]:
+                if key in images and images[key].get("url"):
+                    orig_url = re.sub(r"/\d+x/", "/originals/", images[key]["url"])
+                    return {
+                        "status": "success",
+                        "type": "image",
+                        "title": p_data.get("description") or "Pinterest 4K Image",
                         "download_url": orig_url,
                         "thumbnail": orig_url
                     }
-        except Exception:
-            pass
+    except Exception:
+        pass
 
-    # Method 3: Deep Regex on Full Page Buffer (Fallback for Story Pins / Dynamic Layouts)
-    # Search for MP4s (highest quality)
-    mp4_matches = re.findall(r'https://v\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', html_content)
-    if mp4_matches:
-        # Longest URL usually contains 720p/master parameters
-        best_mp4 = max(mp4_matches, key=len)
-        return {
-            "status": "success",
-            "type": "video",
-            "title": "Pinterest Master Video",
-            "download_url": best_mp4,
-            "thumbnail": ""
-        }
+    # Strategy 3: Regex Raw HTML Fallback
+    if html_backup:
+        mp4_matches = re.findall(r'https://v\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', html_backup)
+        if mp4_matches:
+            return {
+                "status": "success",
+                "type": "video",
+                "title": "Pinterest Master Video",
+                "download_url": max(mp4_matches, key=len),
+                "thumbnail": ""
+            }
 
-    # Search for /originals/ 4K image URLs
-    orig_img_matches = re.findall(r'https://i\.pinimg\.com/originals/[^\s"\'<>\\]+\.(?:jpg|png|webp)', html_content)
-    if orig_img_matches:
-        return {
-            "status": "success",
-            "type": "image",
-            "title": "Pinterest 4K Image",
-            "download_url": orig_img_matches[0],
-            "thumbnail": orig_img_matches[0]
-        }
+        orig_img_matches = re.findall(r'https://i\.pinimg\.com/originals/[^\s"\'<>\\]+\.(?:jpg|png|webp)', html_backup)
+        if orig_img_matches:
+            return {
+                "status": "success",
+                "type": "image",
+                "title": "Pinterest 4K Image",
+                "download_url": orig_img_matches[0],
+                "thumbnail": orig_img_matches[0]
+            }
 
-    # Method 4: OpenGraph Fallback
-    og_video = soup.find("meta", property="og:video") or soup.find("meta", property="og:video:secure_url")
-    og_image = soup.find("meta", property="og:image")
-    og_title = soup.find("meta", property="og:title")
-    title = og_title["content"] if og_title and og_title.get("content") else "Pinterest Media"
-
-    if og_video and og_video.get("content"):
-        return {
-            "status": "success",
-            "type": "video",
-            "title": title,
-            "download_url": og_video["content"],
-            "thumbnail": og_image["content"] if og_image else ""
-        }
-
-    if og_image and og_image.get("content"):
-        high_res = re.sub(r"/\d+x/", "/originals/", og_image["content"])
-        return {
-            "status": "success",
-            "type": "image",
-            "title": title,
-            "download_url": high_res,
-            "thumbnail": high_res
-        }
-
-    return {"status": "error", "message": "Failed to extract media. Make sure the pin is public."}
+    return {"status": "error", "message": "Media extract nahi ho paya. Pin public hai ya check karo."}
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -163,7 +145,7 @@ class handler(BaseHTTPRequestHandler):
         if path == "/api/fetch":
             pin_url = params.get("url", [""])[0].strip()
             if not pin_url:
-                self._send_json({"status": "error", "message": "Missing URL parameter"}, 400)
+                self._send_json({"status": "error", "message": "URL parameter missing"}, 400)
                 return
 
             result = extract_pinterest_media(pin_url)
@@ -178,7 +160,7 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(result)
             return
 
-        # 2. Proxy Stream
+        # 2. Proxy Stream (Bypass CORS for in-app preview)
         elif path == "/api/stream":
             target_url = params.get("url", [""])[0]
             media_type = params.get("type", ["image"])[0]
@@ -199,10 +181,10 @@ class handler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
             return
 
-        # 3. Direct Download Proxy
+        # 3. Direct Download Proxy (Forces instant download)
         elif path == "/api/download":
             target_url = params.get("url", [""])[0]
-            filename = params.get("filename", ["pinterest_media.mp4"])[0]
+            filename = params.get("filename", ["pin_media.mp4"])[0]
             if not target_url:
                 self._send_json({"error": "No download URL specified"}, 400)
                 return
