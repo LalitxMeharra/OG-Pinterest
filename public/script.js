@@ -3,10 +3,12 @@ const pinUrlInput = document.getElementById('pinUrl');
 const pasteBtn = document.getElementById('pasteBtn');
 const submitBtn = document.getElementById('submitBtn');
 
+// PRO VAULT UI IDs
 const resultVault = document.getElementById('resultVault');
-const mediaViewport = document.getElementById('mediaViewport');
 const resBadge = document.getElementById('resBadge');
+const mediaViewport = document.getElementById('mediaViewport');
 const mediaHeading = document.getElementById('mediaHeading');
+const mediaSubinfo = document.getElementById('mediaSubinfo');
 const btnDirectDownload = document.getElementById('btnDirectDownload');
 const dlBtnText = document.getElementById('dlBtnText');
 const btnCopyDirect = document.getElementById('btnCopyDirect');
@@ -15,10 +17,11 @@ const historyWrap = document.getElementById('historyWrap');
 const historyItems = document.getElementById('historyItems');
 const clearVaultBtn = document.getElementById('clearVaultBtn');
 
-let activeDownloadLink = '';
+let forceDownloadLink = ''; // Isme proxy link save hoga share karne ke liye
 
 function toast(msg) {
   const t = document.getElementById('toast');
+  if (!t) return;
   document.getElementById('toastMsg').textContent = msg;
   t.classList.add('show');
   clearTimeout(t._h);
@@ -72,41 +75,51 @@ fetchForm.addEventListener('submit', async (e) => {
 
 // 3. RENDER PREVIEW & LINKS
 function renderResult(data) {
-  activeDownloadLink = data.url; 
-  mediaHeading.textContent = data.title;
+  // Pura Absolute link banaya jo share karne par browser block bypass karke auto-download trigger karega
+  forceDownloadLink = window.location.origin + data.proxy_download;
+  
+  if (mediaHeading) mediaHeading.textContent = data.title;
+  if (mediaSubinfo) mediaSubinfo.textContent = data.type === 'video' ? 'Direct Pipeline Stream · MP4 Video' : 'Direct Pipeline Stream · 4K Image';
 
   if (data.type === 'video') {
-    resBadge.textContent = '1080P MASTER VIDEO';
-    mediaViewport.innerHTML = `<video controls autoplay loop playsinline src="${data.url}"></video>`;
-    dlBtnText.textContent = '⬇ DOWNLOAD MP4';
+    if (resBadge) resBadge.textContent = '1080P MASTER VIDEO';
+    // Direct Pinterest Original URL for instant Video Playback
+    if (mediaViewport) mediaViewport.innerHTML = `<video controls autoplay loop playsinline src="${data.url}" style="max-width: 100%; max-height: 480px;"></video>`;
+    if (dlBtnText) dlBtnText.textContent = '⬇ DOWNLOAD MP4';
   } else {
-    resBadge.textContent = '4K ORIGINAL IMAGE';
-    mediaViewport.innerHTML = `<img src="${data.url}" alt="Pin Media" loading="lazy">`;
-    dlBtnText.textContent = '⬇ DOWNLOAD 4K JPG';
+    if (resBadge) resBadge.textContent = '4K ORIGINAL IMAGE';
+    // Direct Pinterest Original URL for Image View
+    if (mediaViewport) mediaViewport.innerHTML = `<img src="${data.url}" alt="Pin Media" loading="lazy" style="max-width: 100%; max-height: 480px;">`;
+    if (dlBtnText) dlBtnText.textContent = '⬇ DOWNLOAD 4K JPG';
   }
 
-  btnDirectDownload.href = data.proxy_download;
+  // 1-Click download using the backend proxy file attachment headers
+  if (btnDirectDownload) btnDirectDownload.href = data.proxy_download;
   
-  resultVault.style.display = 'block';
-  resultVault.scrollIntoView({ behavior: 'smooth' });
+  if (resultVault) {
+    resultVault.style.display = 'block';
+    resultVault.scrollIntoView({ behavior: 'smooth' });
+  }
 }
 
-// 4. COPY ORIGINAL LINK
-btnCopyDirect.addEventListener('click', () => {
-  if (!activeDownloadLink) return;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(activeDownloadLink);
-    toast('Direct CDN Link Copied!');
-  } else {
-    const temp = document.createElement('input');
-    temp.value = activeDownloadLink;
-    document.body.appendChild(temp);
-    temp.select();
-    document.execCommand('copy');
-    document.body.removeChild(temp);
-    toast('Direct CDN Link Copied!');
-  }
-});
+// 4. COPY AUTO-DOWNLOAD LINK (For sharing)
+if (btnCopyDirect) {
+  btnCopyDirect.addEventListener('click', () => {
+    if (!forceDownloadLink) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(forceDownloadLink);
+      toast('Force-Download Link Copied!');
+    } else {
+      const temp = document.createElement('input');
+      temp.value = forceDownloadLink;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+      toast('Force-Download Link Copied!');
+    }
+  });
+}
 
 // 5. LOCAL HISTORY VAULT
 function fetchVault() {
@@ -118,7 +131,7 @@ function persistVault(item) {
   let list = fetchVault();
   list = list.filter(i => i.url !== item.url);
   list.unshift(item);
-  if (list.length > 6) list.pop();
+  if (list.length > 6) list.pop(); // Max 6 items
   localStorage.setItem('og_vault_pro', JSON.stringify(list));
   renderVault();
 }
@@ -126,29 +139,34 @@ function persistVault(item) {
 function renderVault() {
   const list = fetchVault();
   if (!list.length) {
-    historyWrap.style.display = 'none';
+    if (historyWrap) historyWrap.style.display = 'none';
     return;
   }
 
-  historyItems.innerHTML = list.map(item => `
-    <div class="history-card" onclick='restoreVaultItem(${JSON.stringify(item)})'>
-      <img class="history-thumb" src="${item.url}" alt="Vault Item" loading="lazy">
-      <div class="history-name">${item.title}</div>
-    </div>
-  `).join('');
+  if (historyItems) {
+    historyItems.innerHTML = list.map(item => `
+      <div class="history-card" onclick='restoreVaultItem(${JSON.stringify(item)})'>
+        <img class="history-thumb" src="${item.url}" alt="Vault Item" loading="lazy">
+        <div class="history-name">${item.title}</div>
+      </div>
+    `).join('');
+  }
 
-  historyWrap.style.display = 'block';
+  if (historyWrap) historyWrap.style.display = 'block';
 }
 
+// Global function window ke liye taaki onclick element usko dhundh sake
 window.restoreVaultItem = function(item) {
   renderResult(item);
 };
 
-clearVaultBtn.addEventListener('click', () => {
-  localStorage.removeItem('og_vault_pro');
-  renderVault();
-  toast('Vault History Cleared');
-});
+if (clearVaultBtn) {
+  clearVaultBtn.addEventListener('click', () => {
+    localStorage.removeItem('og_vault_pro');
+    renderVault();
+    toast('Vault History Cleared');
+  });
+}
 
-// Init
+// Initial Load
 renderVault();
