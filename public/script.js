@@ -77,17 +77,14 @@ function renderResult(data) {
 
   if (data.type === 'video') {
     resBadge.textContent = '1080P MASTER VIDEO';
-    // Direct Pinterest CDN link for preview
     mediaViewport.innerHTML = `<video controls autoplay loop playsinline src="${data.url}"></video>`;
     dlBtnText.textContent = '⬇ DOWNLOAD MP4';
   } else {
     resBadge.textContent = '4K ORIGINAL IMAGE';
-    // Direct Pinterest CDN link for preview (bypasses thanks to meta referrer tag)
     mediaViewport.innerHTML = `<img src="${data.url}" alt="Pin Media" loading="lazy">`;
     dlBtnText.textContent = '⬇ DOWNLOAD 4K JPG';
   }
 
-  // Use the Proxy link to FORCE the download dialog box instead of opening in a new tab
   btnDirectDownload.href = data.proxy_download;
   
   resultVault.style.display = 'block';
