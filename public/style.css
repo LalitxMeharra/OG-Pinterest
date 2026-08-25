@@ -491,4 +491,123 @@ footer {
   .dl-grid { grid-template-columns: 1fr; }
   .stats-bar { padding: 10px 4px; }
   .stat-num { font-size: 16px; }
+
+  /* CUSTOM NEO-BRUTALIST VIDEO PLAYER */
+.vp-wrapper {
+  position: relative;
+  width: 100%;
+  background: var(--ink-black);
+  border: 2px solid var(--border-dark);
+  overflow: hidden;
+  box-shadow: 4px 4px 0px var(--border-dark);
+  margin-bottom: 16px;
+}
+
+.vp-wrapper video {
+  width: 100%;
+  display: block;
+  max-height: 480px;
+  object-fit: contain;
+}
+
+.vp-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(20, 13, 7, 0.9);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 12px;
+  border-top: 2px solid var(--border-dark);
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+
+.vp-wrapper:hover .vp-controls, .vp-wrapper.active .vp-controls {
+  transform: translateY(0);
+}
+
+.vp-btn {
+  background: transparent;
+  border: 2px solid transparent;
+  color: var(--bg-paper);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transition: 0.15s;
+}
+
+.vp-btn:hover {
+  background: var(--crimson);
+  border-color: var(--border-dark);
+  color: #fff;
+}
+
+.vp-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+.vp-time {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bg-paper);
+  min-width: 45px;
+  text-align: center;
+}
+
+.vp-progress-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.vp-progress {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--bg-paper);
+  border: 1px solid var(--border-dark);
+  outline: none;
+  cursor: pointer;
+}
+
+.vp-progress::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--crimson);
+  border: 2px solid var(--border-dark);
+}
+
+.vp-big-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--crimson);
+  color: #fff;
+  border: 3px solid var(--border-dark);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px var(--border-dark);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.vp-big-play svg { width: 28px; height: 28px; fill: currentColor; margin-left: 4px; }
+
+.vp-big-play:active {
+  transform: translate(-50%, -46%);
+  box-shadow: 0px 0px 0px var(--border-dark);
+}
+
 }
