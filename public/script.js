@@ -28,7 +28,6 @@ function toast(msg) {
   t._h = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-// Format seconds to mm:ss
 function formatTime(seconds) {
   let min = Math.floor(seconds / 60);
   let sec = Math.floor(seconds % 60);
@@ -78,15 +77,15 @@ fetchForm.addEventListener('submit', async (e) => {
   }
 });
 
-// Custom Video Player Builder
+// Premium Custom Player HTML (No Autoplay)
 function buildCustomVideoPlayer(videoUrl, posterUrl) {
   return `
-    <div class="vp-wrapper" id="customPlayer">
+    <div class="vp-wrapper is-paused" id="customPlayer">
       <video id="vpVid" src="${videoUrl}" poster="${posterUrl}" playsinline preload="metadata"></video>
-      <button class="vp-big-play" id="vpBigPlay">
+      <div class="vp-overlay-play" id="vpOverlayPlay">
         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-      </button>
-      <div class="vp-controls">
+      </div>
+      <div class="vp-controls" id="vpControls">
         <button class="vp-btn" id="vpPlay">
           <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         </button>
@@ -97,6 +96,9 @@ function buildCustomVideoPlayer(videoUrl, posterUrl) {
         <button class="vp-btn" id="vpMute">
           <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
         </button>
+        <button class="vp-btn" id="vpFull">
+          <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+        </button>
       </div>
     </div>
   `;
@@ -105,37 +107,42 @@ function buildCustomVideoPlayer(videoUrl, posterUrl) {
 function initVideoLogic() {
   const wrapper = document.getElementById('customPlayer');
   const vid = document.getElementById('vpVid');
-  const bigPlay = document.getElementById('vpBigPlay');
   const playBtn = document.getElementById('vpPlay');
   const seek = document.getElementById('vpSeek');
   const time = document.getElementById('vpTime');
   const muteBtn = document.getElementById('vpMute');
+  const fullBtn = document.getElementById('vpFull');
 
   if(!vid) return;
 
   let isDragging = false;
 
-  const togglePlay = () => {
+  const togglePlay = (e) => {
+    // Prevent controls click from pausing/playing the video background
+    if(e.target.closest('.vp-controls')) return; 
     vid.paused ? vid.play() : vid.pause();
   };
 
-  const updatePlayIcons = () => {
+  const updatePlayState = () => {
     if (vid.paused) {
-      bigPlay.style.display = 'flex';
+      wrapper.classList.remove('is-playing');
+      wrapper.classList.add('is-paused');
       playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-      wrapper.classList.remove('active');
     } else {
-      bigPlay.style.display = 'none';
+      wrapper.classList.add('is-playing');
+      wrapper.classList.remove('is-paused');
       playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-      wrapper.classList.add('active');
     }
   };
 
-  vid.addEventListener('play', updatePlayIcons);
-  vid.addEventListener('pause', updatePlayIcons);
-  vid.addEventListener('click', togglePlay);
-  bigPlay.addEventListener('click', togglePlay);
-  playBtn.addEventListener('click', togglePlay);
+  vid.addEventListener('play', updatePlayState);
+  vid.addEventListener('pause', updatePlayState);
+  wrapper.addEventListener('click', togglePlay);
+  
+  playBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    vid.paused ? vid.play() : vid.pause();
+  });
 
   vid.addEventListener('timeupdate', () => {
     if (!isDragging) {
@@ -151,11 +158,18 @@ function initVideoLogic() {
     isDragging = false;
   });
 
-  muteBtn.addEventListener('click', () => {
+  muteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     vid.muted = !vid.muted;
     muteBtn.innerHTML = vid.muted 
       ? '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>'
       : '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>';
+  });
+
+  fullBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (vid.requestFullscreen) vid.requestFullscreen();
+    else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
   });
 }
 
@@ -163,21 +177,20 @@ function renderResult(data) {
   forceDownloadLink = window.location.origin + data.proxy_download;
   
   if (previewTitle) previewTitle.textContent = data.title;
-  if (previewMeta) previewMeta.textContent = data.type === 'video' ? 'Direct Pipeline Stream · MP4 Video' : 'Direct Pipeline Stream · 4K Image';
+  if (previewMeta) previewMeta.textContent = data.type === 'video' ? 'Direct Pipeline Stream · MP4 Video' : 'Direct Pipeline Stream · High-Res Image';
 
   if (data.type === 'video') {
     if (mediaTypeTag) mediaTypeTag.textContent = 'VIDEO · 1080P MASTER';
-    // Yaha apna TAGDA custom player inject ho raha hai
     if (mediaWrapper) {
         mediaWrapper.innerHTML = buildCustomVideoPlayer(data.url, data.thumbnail);
-        initVideoLogic(); // Listeners attach karna
+        initVideoLogic();
     }
     if (btnPrimaryText) btnPrimaryText.textContent = '⬇ DOWNLOAD MP4';
     if (btnPrimarySub) btnPrimarySub.textContent = 'Master Quality Video';
   } else {
-    if (mediaTypeTag) mediaTypeTag.textContent = 'IMAGE · 4K ORIGINAL';
+    if (mediaTypeTag) mediaTypeTag.textContent = 'IMAGE · ORIGINAL RAW';
     if (mediaWrapper) mediaWrapper.innerHTML = `<img src="${data.url}" alt="Pin Media" loading="lazy" style="max-width: 100%; max-height: 480px; object-fit: contain;">`;
-    if (btnPrimaryText) btnPrimaryText.textContent = '⬇ DOWNLOAD 4K JPG';
+    if (btnPrimaryText) btnPrimaryText.textContent = '⬇ DOWNLOAD JPG';
     if (btnPrimarySub) btnPrimarySub.textContent = 'Original Raw Image';
   }
 
@@ -194,7 +207,7 @@ if (btnCopyLink) {
     if (!forceDownloadLink) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(forceDownloadLink);
-      toast('Link Copied!'); // Updated Toast Text
+      toast('Link Copied!'); 
     } else {
       const temp = document.createElement('input');
       temp.value = forceDownloadLink;
@@ -202,7 +215,7 @@ if (btnCopyLink) {
       temp.select();
       document.execCommand('copy');
       document.body.removeChild(temp);
-      toast('Link Copied!'); // Updated Toast Text
+      toast('Link Copied!'); 
     }
   });
 }
@@ -216,12 +229,11 @@ function persistVault(item) {
   let list = fetchVault();
   list = list.filter(i => i.url !== item.url);
   
-  // Save specific payload including thumbnail
   list.unshift({
       title: item.title,
       type: item.type,
       url: item.url,
-      thumbnail: item.thumbnail || item.url, // Video h to thumb, image h to url
+      thumbnail: item.thumbnail || item.url, 
       proxy_download: item.proxy_download
   });
 
