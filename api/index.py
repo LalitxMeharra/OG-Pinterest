@@ -17,9 +17,7 @@ def extract_pinterest_media(pin_url):
     session.headers.update(HEADERS)
     
     try:
-        # Short URL / Pin link resolve
         res = session.get(pin_url, allow_redirects=True, timeout=12)
-        final_url = res.url
         html_text = res.text
     except Exception as e:
         return {"status": "error", "message": f"URL Connection Failed: {str(e)}"}
@@ -35,7 +33,7 @@ def extract_pinterest_media(pin_url):
             for _, pin in pins.items():
                 title = pin.get("title") or pin.get("grid_title") or "Pinterest Media"
                 
-                # Check for Videos (Highest resolution mp4)
+                # Videos (MP4)
                 videos = pin.get("videos", {})
                 if videos and "video_list" in videos:
                     v_list = videos["video_list"]
@@ -58,7 +56,7 @@ def extract_pinterest_media(pin_url):
                             "thumbnail": thumb
                         }
 
-                # Check for 4K / Original Raw Images
+                # 4K / Original Raw Images
                 images = pin.get("images", {})
                 orig_img = images.get("orig", {}).get("url")
                 if orig_img:
@@ -72,7 +70,7 @@ def extract_pinterest_media(pin_url):
         except Exception:
             pass
 
-    # 2. Secondary Strategy: Regex Extraction on Raw HTML
+    # 2. Regex Fallback for Videos
     mp4_matches = re.findall(r'https://v\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', html_text)
     if mp4_matches:
         return {
@@ -83,6 +81,7 @@ def extract_pinterest_media(pin_url):
             "thumbnail": ""
         }
 
+    # 3. Regex Fallback for 4K Images
     orig_img_matches = re.findall(r'https://i\.pinimg\.com/originals/[^\s"\'<>\\]+\.(?:jpg|png|webp)', html_text)
     if orig_img_matches:
         return {
@@ -93,7 +92,7 @@ def extract_pinterest_media(pin_url):
             "thumbnail": orig_img_matches[0]
         }
 
-    # 3. Third Strategy: OpenGraph Tags
+    # 4. OpenGraph Fallback
     og_video = soup.find("meta", property="og:video") or soup.find("meta", property="og:video:secure_url")
     og_image = soup.find("meta", property="og:image")
     og_title = soup.find("meta", property="og:title")
@@ -123,30 +122,11 @@ def extract_pinterest_media(pin_url):
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
+        path = parsed.path.lower()
         params = urllib.parse.parse_qs(parsed.query)
 
-        # 1. API Fetch Route
-        if path == "/api/fetch":
-            pin_url = params.get("url", [""])[0].strip()
-            if not pin_url:
-                self._send_json({"status": "error", "message": "Missing URL parameter"}, 400)
-                return
-
-            result = extract_pinterest_media(pin_url)
-            if result.get("status") == "success":
-                media_type = result["type"]
-                ext = "mp4" if media_type == "video" else "jpg"
-                clean_title = re.sub(r'[^\w\s-]', '', result["title"]).strip().replace(' ', '_') or "pin_media"
-
-                result["proxy_stream"] = f"/api/stream?url={urllib.parse.quote(result['download_url'])}&type={media_type}"
-                result["proxy_download"] = f"/api/download?url={urllib.parse.quote(result['download_url'])}&filename={urllib.parse.quote(clean_title)}.{ext}"
-
-            self._send_json(result)
-            return
-
-        # 2. Direct Proxy Streaming (CORS bypass for UI player/image)
-        elif path == "/api/stream":
+        # 1. STREAM PROXY ROUTE
+        if "stream" in path or ("url" in params and params.get("type")):
             target_url = params.get("url", [""])[0]
             media_type = params.get("type", ["image"])[0]
             if not target_url:
@@ -166,8 +146,8 @@ class handler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
             return
 
-        # 3. Direct Download Force Endpoint
-        elif path == "/api/download":
+        # 2. DOWNLOAD PROXY ROUTE
+        elif "download" in path or ("url" in params and params.get("filename")):
             target_url = params.get("url", [""])[0]
             filename = params.get("filename", ["pinterest_media.mp4"])[0]
             if not target_url:
@@ -190,8 +170,27 @@ class handler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, 500)
             return
 
+        # 3. FETCH / MAIN ENDPOINT (Catches /api/fetch, /api/index.py, or any request with ?url=)
+        elif "fetch" in path or "url" in params:
+            pin_url = params.get("url", [""])[0].strip()
+            if not pin_url:
+                self._send_json({"status": "error", "message": "Missing URL parameter"}, 400)
+                return
+
+            result = extract_pinterest_media(pin_url)
+            if result.get("status") == "success":
+                media_type = result["type"]
+                ext = "mp4" if media_type == "video" else "jpg"
+                clean_title = re.sub(r'[^\w\s-]', '', result["title"]).strip().replace(' ', '_') or "pin_media"
+
+                result["proxy_stream"] = f"/api/stream?url={urllib.parse.quote(result['download_url'])}&type={media_type}"
+                result["proxy_download"] = f"/api/download?url={urllib.parse.quote(result['download_url'])}&filename={urllib.parse.quote(clean_title)}.{ext}"
+
+            self._send_json(result)
+            return
+
         else:
-            self._send_json({"error": "Not Found"}, 404)
+            self._send_json({"error": "Endpoint not recognized", "received_path": self.path}, 404)
 
     def _send_json(self, data, status=200):
         self.send_response(status)
