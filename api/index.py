@@ -28,7 +28,7 @@ def extract_pinterest_media(pin_url):
         return {"status": "error", "message": f"Connection Error: {str(e)}"}
 
     match = re.search(r'/pin/(\d+)', final_url)
-    pin_id = match.group(1) if match else None
+    pin_id = match.group(1) if match else "download" # Default ID agar na mile
 
     soup = BeautifulSoup(html_text, "html.parser")
     pws_script = soup.find("script", {"id": "__PWS_INITIAL_PROPS__"}) or soup.find("script", {"id": "__PWS_DATA__"})
@@ -36,7 +36,7 @@ def extract_pinterest_media(pin_url):
     og_image = soup.find("meta", property="og:image")
     fallback_thumb = og_image["content"] if og_image and og_image.get("content") else ""
 
-    if pws_script and pws_script.string and pin_id:
+    if pws_script and pws_script.string and pin_id != "download":
         try:
             data = json.loads(pws_script.string)
             pins = data.get("initialReduxState", {}).get("pins", {})
@@ -78,28 +78,28 @@ def extract_pinterest_media(pin_url):
                         if '1080p' in url or '720p' in url or 'expMp4' in url:
                             best_video = url
                             break
-                    return {"status": "success", "type": "video", "title": title, "url": best_video, "thumbnail": best_img}
+                    return {"status": "success", "type": "video", "title": title, "url": best_video, "thumbnail": best_img, "pin_id": pin_id}
 
                 if best_img:
-                    return {"status": "success", "type": "image", "title": title, "url": best_img, "thumbnail": best_img}
+                    return {"status": "success", "type": "image", "title": title, "url": best_img, "thumbnail": best_img, "pin_id": pin_id}
         except Exception:
             pass
 
     raw_mp4s = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.mp4', html_text)
     if raw_mp4s:
         best_video = max(raw_mp4s, key=len)
-        return {"status": "success", "type": "video", "title": "Pinterest Video", "url": best_video, "thumbnail": fallback_thumb}
+        return {"status": "success", "type": "video", "title": "Pinterest Video", "url": best_video, "thumbnail": fallback_thumb, "pin_id": pin_id}
         
     raw_m3u8s = re.findall(r'https://v[0-9a-zA-Z-]*\.pinimg\.com/videos/[^\s"\'<>\\]+\.m3u8', html_text)
     if raw_m3u8s:
         for m3u8 in raw_m3u8s:
             converted = convert_m3u8_to_mp4(m3u8)
             if converted:
-                return {"status": "success", "type": "video", "title": "Pinterest Video", "url": converted, "thumbnail": fallback_thumb}
+                return {"status": "success", "type": "video", "title": "Pinterest Video", "url": converted, "thumbnail": fallback_thumb, "pin_id": pin_id}
 
     if fallback_thumb:
         safe_high_res = fallback_thumb.replace("236x", "736x").replace("474x", "736x")
-        return {"status": "success", "type": "image", "title": "Pinterest Image", "url": safe_high_res, "thumbnail": fallback_thumb}
+        return {"status": "success", "type": "image", "title": "Pinterest Image", "url": safe_high_res, "thumbnail": fallback_thumb, "pin_id": pin_id}
 
     return {"status": "error", "message": "Failed to extract media. Check if pin is public."}
 
@@ -142,8 +142,14 @@ class handler(BaseHTTPRequestHandler):
             if result.get("status") == "success":
                 safe_url = urllib.parse.quote(result['url'], safe='')
                 ext = "mp4" if result["type"] == "video" else "jpg"
+                
+                # Title aur Pin ID ko jod kar unique naam banana
                 clean_title = re.sub(r'[^\w\s-]', '', result["title"]).strip().replace(' ', '_') or "pin_media"
-                result["proxy_download"] = f"/api/download?url={safe_url}&filename={urllib.parse.quote(clean_title)}.{ext}"
+                pin_id = result.get("pin_id", "vault")
+                final_filename = f"{clean_title}_{pin_id}.{ext}"
+                
+                # Proxy link generate karna naye naam ke sath
+                result["proxy_download"] = f"/api/download?url={safe_url}&filename={urllib.parse.quote(final_filename)}"
 
             self._send_json(result)
             return
