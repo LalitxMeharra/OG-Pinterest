@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4efe6">
+  <title>OG-PINTEREST Downloader — Master Visuals. Free. Forever.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <!-- TOPBAR -->
+  <nav>
+    <a href="/" class="nav-logo">OG-PIN<span>.</span>DL</a>
+    <div class="nav-badge">4K &amp; HD · ZERO WATERMARK</div>
+  </nav>
+
+  <!-- CONTAINER -->
+  <div class="container">
+    <div class="hero-sun"></div>
+
+    <div class="hero-badge">v1.0.0 · DIRECT MEDIA VAULT</div>
+    <h1 class="hero-title">
+      Master Visuals.<br>
+      <span class="red-text">Download</span> Free.
+    </h1>
+
+    <div class="hero-sub-row">
+      <div class="hero-line"></div>
+      <span class="hero-sub-text">High-Res Pin &amp; Video Sanctuary</span>
+    </div>
+
+    <p class="hero-desc">
+      <strong>OG-PINTEREST Downloader</strong> — Stream, preview, and grab original 4K Pinterest photos and high-bitrate MP4 videos without redirects, watermark, or quality loss.
+    </p>
+
+    <!-- FETCH FORM -->
+    <form id="fetchForm" class="fetch-card">
+      <input id="pinUrl" type="url" placeholder="Paste pin link (pin.it/... or pinterest.com/pin/...)" required autocomplete="off">
+      <button type="button" id="pasteBtn" class="btn-paste">📋 PASTE</button>
+      <button type="submit" id="submitBtn" class="btn-fetch">⚡ FETCH</button>
+    </form>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-num">4K</span>
+        <span class="stat-label">Image Res</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">1080P</span>
+        <span class="stat-label">Video Stream</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">0s</span>
+        <span class="stat-label">Wait Time</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">₹0</span>
+        <span class="stat-label">Cost Forever</span>
+      </div>
+    </div>
+
+    <!-- PREVIEW & DOWNLOAD CARD -->
+    <div id="previewBlock" class="preview-block">
+      <div class="preview-header">
+        <span class="preview-tag" id="mediaTypeTag">IMAGE · 4K ORIGINAL</span>
+        <span style="font-size: 11px; color: var(--text-muted);" id="statusTag">STATUS: READY</span>
+      </div>
+
+      <div class="media-container" id="mediaWrapper">
+        <!-- Dynamic Image / Video injected via JS -->
+      </div>
+
+      <div class="pin-title" id="previewTitle">—</div>
+      <div class="pin-meta" id="previewMeta">Direct Proxy Stream · Unwatermarked Master</div>
+
+      <div class="dl-label">⚡ DIRECT DOWNLOAD STAMPS</div>
+      <div class="dl-grid">
+        <a id="btnPrimaryDl" class="dl-stamp" href="#" download>
+          <span class="dl-type" id="btnPrimaryText">⬇ DOWNLOAD MEDIA</span>
+          <span class="dl-sub" id="btnPrimarySub">Master Quality</span>
+        </a>
+        <div class="dl-stamp" id="btnCopyLink">
+          <span class="dl-type">🔗 COPY DIRECT LINK</span>
+          <span class="dl-sub">Instant Clipboard Share</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECENT LOCAL HISTORY -->
+    <div id="historySection" style="display: none;">
+      <div class="history-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="section-num">01</span>
+          <span class="section-title">RECENT VAULT HISTORY</span>
+        </div>
+        <button class="btn-clear" id="clearHistoryBtn">Clear History</button>
+      </div>
+      <div class="history-grid" id="historyGrid"></div>
+    </div>
+
+    <!-- MANIFESTO BANNER -->
+    <div class="manifesto-card">
+      <p class="manifesto-quote">
+        "Creative visuals belong to the <span>creator's mind</span>, not to compressed formats."
+      </p>
+      <div class="manifesto-author">— OG-PINTEREST MANIFESTO</div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"><div class="dot"></div><span id="toastMsg"></span></div>
+
+  <!-- FOOTER -->
+  <footer>
+    © 2026 <strong>OG-PINTEREST Downloader</strong> · Pure Visual Freedom
+  </footer>
+
+  <script src="/script.js" defer></script>
+</body>
+</html>
